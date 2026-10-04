@@ -1,0 +1,11 @@
+#:schema ./capability_schema.json
+
+id = "cap-001"
+subject = "plugin:a"
+effect = "allow"
+actions = ["read"]
+sensitivity = "low"
+
+[resource]
+type = "file"
+path = "/tmp/*"

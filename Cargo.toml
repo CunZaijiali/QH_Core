@@ -1,0 +1,6 @@
+[workspace]
+members = [
+    "crates/qh_core",
+    "crates/qh_macros",
+]
+resolver = "2"

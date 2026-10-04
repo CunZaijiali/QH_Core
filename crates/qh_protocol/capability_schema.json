@@ -1,0 +1,252 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "$id": "https://example.com/schemas/capability.schema.json",
+  "title": "Capability",
+  "description": "能力授权模型",
+  "type": "object",
+  "properties": {
+    "id": {
+      "type": "string",
+      "description": "能力唯一标识"
+    },
+    "subject": {
+      "type": "string",
+      "description": "能力主体，例如 plugin:a"
+    },
+    "effect": {
+      "$ref": "#/definitions/Effect"
+    },
+    "actions": {
+      "type": "array",
+      "description": "允许或拒绝的操作集合",
+      "items": { "$ref": "#/definitions/Action" },
+      "uniqueItems": true
+    },
+    "resource": {
+      "$ref": "#/definitions/ResourcePattern"
+    },
+    "constraints": {
+      "type": "array",
+      "description": "附加约束，默认空数组",
+      "items": { "$ref": "#/definitions/Constraint" },
+      "default": []
+    },
+    "valid_from": {
+      "type": ["integer", "null"],
+      "minimum": 0,
+      "description": "生效起始时间（Unix 秒），null 表示不限制"
+    },
+    "valid_until": {
+      "type": ["integer", "null"],
+      "minimum": 0,
+      "description": "生效截止时间（Unix 秒），null 表示不限制"
+    },
+    "delegatable": {
+      "type": "boolean",
+      "default": false,
+      "description": "是否可被委托"
+    },
+    "sensitivity": {
+      "$ref": "#/definitions/SensitivityLevel"
+    },
+    "signature": {
+      "type": ["string", "null"],
+      "description": "签名，null 表示无签名"
+    }
+  },
+  "required": ["id", "subject", "effect", "actions", "resource", "sensitivity"],
+  "additionalProperties": false,
+
+  "definitions": {
+    "Action": {
+      "description": "操作类型。Custom 使用外部标签，序列化为 {\"custom\": \"...\"}",
+      "oneOf": [
+        { "const": "read" },
+        { "const": "write" },
+        { "const": "execute" },
+        { "const": "invoke" },
+        { "const": "delegate" },
+        {
+          "type": "object",
+          "properties": {
+            "custom": { "type": "string" }
+          },
+          "required": ["custom"],
+          "additionalProperties": false
+        }
+      ]
+    },
+
+    "Effect": {
+      "description": "允许或拒绝",
+      "enum": ["allow", "deny"]
+    },
+
+    "SensitivityLevel": {
+      "description": "敏感级别",
+      "enum": ["low", "medium", "high", "critical"]
+    },
+
+    "ResourcePattern": {
+      "description": "资源模式，使用内部标签 type 区分变体",
+      "oneOf": [
+        {
+          "type": "object",
+          "properties": {
+            "type": { "const": "file" },
+            "path": { "type": "string" },
+            "max_size": { "type": ["integer", "null"], "minimum": 0 }
+          },
+          "required": ["type", "path"],
+          "additionalProperties": false
+        },
+        {
+          "type": "object",
+          "properties": {
+            "type": { "const": "network" },
+            "host": { "type": "string" },
+            "ports": {
+              "type": "array",
+              "items": { "type": "integer", "minimum": 0, "maximum": 65535 },
+              "default": []
+            },
+            "protocol": { "type": ["string", "null"] }
+          },
+          "required": ["type", "host"],
+          "additionalProperties": false
+        },
+        {
+          "type": "object",
+          "properties": {
+            "type": { "const": "tool" },
+            "name": { "type": "string" },
+            "max_calls": { "type": ["integer", "null"], "minimum": 0 }
+          },
+          "required": ["type", "name"],
+          "additionalProperties": false
+        },
+        {
+          "type": "object",
+          "properties": {
+            "type": { "const": "extension" },
+            "point": { "type": "string" }
+          },
+          "required": ["type", "point"],
+          "additionalProperties": false
+        },
+        {
+          "type": "object",
+          "properties": {
+            "type": { "const": "process" },
+            "command": { "type": "string" },
+            "max_memory": { "type": ["integer", "null"], "minimum": 0 }
+          },
+          "required": ["type", "command"],
+          "additionalProperties": false
+        },
+        {
+          "type": "object",
+          "properties": {
+            "type": { "const": "plugin" },
+            "target": { "type": "string" },
+            "actions": {
+              "type": "array",
+              "items": { "$ref": "#/definitions/Action" },
+              "default": []
+            }
+          },
+          "required": ["type", "target"],
+          "additionalProperties": false
+        },
+        {
+          "type": "object",
+          "properties": {
+            "type": { "const": "custom" },
+            "kind": { "type": "string" },
+            "value": { "type": "string" }
+          },
+          "required": ["type", "kind", "value"],
+          "additionalProperties": false
+        }
+      ]
+    },
+
+    "Constraint": {
+      "description": "约束条件，使用内部标签 type 区分变体",
+      "oneOf": [
+        {
+          "type": "object",
+          "properties": {
+            "type": { "const": "session" },
+            "id": { "type": "string" }
+          },
+          "required": ["type", "id"],
+          "additionalProperties": false
+        },
+        {
+          "type": "object",
+          "properties": {
+            "type": { "const": "time_window" },
+            "from": { "type": "integer", "minimum": 0 },
+            "to": { "type": "integer", "minimum": 0 }
+          },
+          "required": ["type", "from", "to"],
+          "additionalProperties": false
+        },
+        {
+          "type": "object",
+          "properties": {
+            "type": { "const": "rate_limit" },
+            "max": { "type": "integer", "minimum": 0 },
+            "window_seconds": { "type": "integer", "minimum": 0 }
+          },
+          "required": ["type", "max", "window_seconds"],
+          "additionalProperties": false
+        },
+        {
+          "type": "object",
+          "properties": {
+            "type": { "const": "requires_user_consent" }
+          },
+          "required": ["type"],
+          "additionalProperties": false
+        },
+        {
+          "type": "object",
+          "properties": {
+            "type": { "const": "audit_level" },
+            "level": { "type": "string" }
+          },
+          "required": ["type", "level"],
+          "additionalProperties": false
+        },
+        {
+          "type": "object",
+          "properties": {
+            "type": { "const": "read_only" }
+          },
+          "required": ["type"],
+          "additionalProperties": false
+        },
+        {
+          "type": "object",
+          "properties": {
+            "type": { "const": "no_credentials" }
+          },
+          "required": ["type"],
+          "additionalProperties": false
+        },
+        {
+          "type": "object",
+          "properties": {
+            "type": { "const": "custom" },
+            "name": { "type": "string" },
+            "value": { "type": "string" }
+          },
+          "required": ["type", "name", "value"],
+          "additionalProperties": false
+        }
+      ]
+    }
+  }
+}
