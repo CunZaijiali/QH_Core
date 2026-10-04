@@ -7,7 +7,7 @@ edition = "2024"
 qh_macros = { path = "../qh_macros" }
 tokio = { version = "1.53", features = ["full"] }
 tokio-util = { version = "0.7", features = ["rt"] }
-ractor = "0.16.5"
+ractor = { version = "0.16.5", features = ["async-trait"] }
 futures-util = "0.3"
 jsonrpc-core = "18.0.0"
 toml = "1.1.6"

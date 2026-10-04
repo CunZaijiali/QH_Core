@@ -100,7 +100,7 @@ pub trait CompletionAdapter: Send + Sync {
 }
 ```
 
-- 内置**一个** OpenAI-compatible HTTP Adapter，经配置连 OpenAI / DeepSeek / 本地兼容服务 / 企业接口。
+- 内置一个 OpenAI-compatible HTTP Adapter，作为**默认插件**：编译进 Core、默认启用，但走**与其他插件完全相同**的接口，可被配置覆盖或禁用。它经配置连 OpenAI / DeepSeek / 本地兼容服务 / 企业接口。
 - 只维护一个 active adapter + 一个默认模型 + `complete`。
 - `AdapterProvider` 只保留 `OpenAiCompatible`；不加 `DeepSeek` / `Anthropic` / `Gemini` / `Ollama` / `Azure` 枚举。
 - Core 在 Adapter 之上封装：超时、取消、审计、错误映射。

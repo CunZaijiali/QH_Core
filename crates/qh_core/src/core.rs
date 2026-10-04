@@ -3,23 +3,27 @@ pub mod shutdown;
 
 use std::sync::Arc;
 
+use ractor::{Actor, ActorRef};
+use tokio::sync::oneshot;
 use tokio_util::sync::CancellationToken;
 
 use crate::config::CoreConfig;
+use crate::domain::SessionId;
 use crate::domain::message::{CompletionRequest, CompletionResponse, Message, Role};
-use crate::error::{AdapterError, BootstrapError, CoreError};
+use crate::error::{AdapterError, BootstrapError, CoreError, SessionError};
 use crate::event::EventService;
 use crate::http::HttpClient;
-use crate::llm::openai::OpenAiCompatibleAdapter;
 use crate::llm::CompletionAdapter;
+use crate::llm::openai::OpenAiCompatibleAdapter;
 use crate::logging::Logger;
+use crate::runtime::root::{RootArgs, RootMsg, RootSupervisor};
 use crate::security::AuditService;
-use crate::storage::sqlite::SqliteStore;
+use crate::storage::sqlite::{SessionRecord, SqliteStore};
 
 /// qh_core 运行时。
 ///
-/// 当前落地 Phase 1-4（基础设施 / 事件 / 核心服务 / 模型适配器），
-/// Phase 5-7（插件 / 会话 / handle）逐步补齐。
+/// 当前落地 Phase 1-6（基础设施 / 事件 / 核心服务 / 模型适配器 / 会话），
+/// Phase 5、7（插件 / handle）逐步补齐。
 pub struct AgentCore {
     config: Arc<CoreConfig>,
     logger: Logger,
@@ -28,6 +32,7 @@ pub struct AgentCore {
     audit: Arc<AuditService>,
     http: Arc<HttpClient>,
     adapter: Option<Arc<dyn CompletionAdapter>>,
+    sessions: Option<ActorRef<RootMsg>>,
     shutdown: CancellationToken,
 }
 
@@ -62,7 +67,20 @@ impl AgentCore {
         // TODO plugins.enabled=false 时跳过
 
         // Phase 6: 会话与上下文
-        // TODO RootSupervisor (ractor)
+        let sessions = match &adapter {
+            Some(adapter) => {
+                let args = RootArgs {
+                    model: adapter.model().clone(),
+                    adapter: adapter.clone(),
+                    store: store.clone(),
+                };
+                let (root, _handle) = Actor::spawn(None, RootSupervisor, args)
+                    .await
+                    .map_err(|e| BootstrapError::Runtime(format!("root supervisor: {e}")))?;
+                Some(root)
+            }
+            None => None,
+        };
 
         // Phase 7: 组装 handle
         // TODO AgentCoreHandle
@@ -75,17 +93,19 @@ impl AgentCore {
             audit,
             http,
             adapter,
+            sessions,
             shutdown: CancellationToken::new(),
         })
     }
 
-    /// 用默认模型发送一条用户消息，返回补全结果。
+    /// 是否配置了可用的模型适配器。
+    pub fn has_adapter(&self) -> bool {
+        self.adapter.is_some()
+    }
+
+    /// 用默认模型发送一条用户消息（无会话状态）。
     pub async fn complete(&self, content: impl Into<String>) -> Result<CompletionResponse, CoreError> {
-        let adapter = self.adapter.as_ref().ok_or_else(|| {
-            CoreError::Adapter(AdapterError::NoAdapterForModel(
-                "no enabled adapter configured".into(),
-            ))
-        })?;
+        let adapter = self.adapter.as_ref().ok_or_else(no_adapter)?;
         let request = CompletionRequest {
             model: adapter.model().clone(),
             messages: vec![Message::new(Role::User, content)],
@@ -93,6 +113,64 @@ impl AgentCore {
             max_tokens: None,
         };
         Ok(adapter.complete(request, self.shutdown.clone()).await?)
+    }
+
+    /// 创建一个新会话。
+    pub async fn create_session(&self) -> Result<SessionId, CoreError> {
+        let root = self.root()?;
+        let (tx, rx) = oneshot::channel();
+        root.send_message(RootMsg::CreateSession { reply: tx })
+            .map_err(|_| CoreError::Session(SessionError::Closed))?;
+        let inner = rx.await.map_err(|_| CoreError::Session(SessionError::Closed))?;
+        Ok(inner?)
+    }
+
+    /// 列出所有会话（含持久化元数据）。
+    pub async fn list_sessions(&self) -> Result<Vec<SessionRecord>, CoreError> {
+        let root = self.root()?;
+        let (tx, rx) = oneshot::channel();
+        root.send_message(RootMsg::ListSessions { reply: tx })
+            .map_err(|_| CoreError::Session(SessionError::Closed))?;
+        let inner = rx.await.map_err(|_| CoreError::Session(SessionError::Closed))?;
+        Ok(inner?)
+    }
+
+    /// 删除一个会话。
+    pub async fn delete_session(&self, id: SessionId) -> Result<(), CoreError> {
+        let root = self.root()?;
+        let (tx, rx) = oneshot::channel();
+        root.send_message(RootMsg::DeleteSession { id, reply: tx })
+            .map_err(|_| CoreError::Session(SessionError::Closed))?;
+        let inner = rx.await.map_err(|_| CoreError::Session(SessionError::Closed))?;
+        Ok(inner?)
+    }
+
+    /// 向指定会话发送消息，返回助手回复。
+    pub async fn send_message(&self, id: SessionId, content: impl Into<String>) -> Result<String, CoreError> {
+        let root = self.root()?;
+        let (tx, rx) = oneshot::channel();
+        root.send_message(RootMsg::SendMessage {
+            id,
+            content: content.into(),
+            reply: tx,
+        })
+        .map_err(|_| CoreError::Session(SessionError::Closed))?;
+        let inner = rx.await.map_err(|_| CoreError::Session(SessionError::Closed))?;
+        Ok(inner?)
+    }
+
+    /// 读取指定会话的历史消息。
+    pub async fn history(&self, id: SessionId) -> Result<Vec<Message>, CoreError> {
+        let root = self.root()?;
+        let (tx, rx) = oneshot::channel();
+        root.send_message(RootMsg::History { id, reply: tx })
+            .map_err(|_| CoreError::Session(SessionError::Closed))?;
+        let inner = rx.await.map_err(|_| CoreError::Session(SessionError::Closed))?;
+        Ok(inner?)
+    }
+
+    fn root(&self) -> Result<&ActorRef<RootMsg>, CoreError> {
+        self.sessions.as_ref().ok_or_else(no_adapter)
     }
 
     /// main loop, waiting for shutdown signal
@@ -122,4 +200,10 @@ impl AgentCore {
         // 7. verify audit chain
         Ok(())
     }
+}
+
+fn no_adapter() -> CoreError {
+    CoreError::Adapter(AdapterError::NoAdapterForModel(
+        "no enabled adapter configured".into(),
+    ))
 }

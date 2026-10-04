@@ -10,6 +10,8 @@ use serde_with::{DurationSeconds, serde_as};
 use directories::ProjectDirs;
 use std::fs;
 
+use crate::plugin::PluginKind;
+
 const CONFIG_SCHEMA_VERSION: u32 = 1;
 const QUALIFIER: &str = "com";
 const ORGANISATION: &str = "cun-zai";
@@ -968,11 +970,41 @@ impl Default for HealthCheckConfig {
     }
 }
 
+/// 显式登记的单个插件条目（v1 不扫目录，逐个列出）。
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(default)]
+pub struct PluginEntryConfig {
+    /// 插件唯一标识。
+    pub id: String,
+    /// 插件分类。
+    pub kind: PluginKind,
+    /// 入口：Native 为注册表标识，Sidecar 为目录或入口路径。
+    pub entry: String,
+    /// 是否随 Core 启动预热（默认懒加载）。
+    pub auto_start: bool,
+    /// 是否启用该条目。
+    pub enabled: bool,
+}
+
+impl Default for PluginEntryConfig {
+    fn default() -> Self {
+        Self {
+            id: String::new(),
+            kind: PluginKind::default(),
+            entry: String::new(),
+            auto_start: false,
+            enabled: true,
+        }
+    }
+}
+
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(default)]
 pub struct PluginsConfig {
     pub enabled: bool,
     pub directories: Vec<PathBuf>,
+    /// 显式插件列表。
+    pub entries: Vec<PluginEntryConfig>,
     pub auto_start: AutoStartPolicy,
     pub lifecycle: PluginLifecycleConfig,
     pub grant_policy: GrantPolicy,
@@ -986,6 +1018,7 @@ impl Default for PluginsConfig {
         Self {
             enabled: false,
             directories: Vec::new(),
+            entries: Vec::new(),
             auto_start: AutoStartPolicy::default(),
             lifecycle: PluginLifecycleConfig::default(),
             grant_policy: GrantPolicy::default(),
@@ -998,6 +1031,20 @@ impl Default for PluginsConfig {
 
 impl PluginsConfig {
     fn validate(&self, safe_mode: bool) -> Result<(), ConfigError> {
+        let mut ids = std::collections::HashSet::new();
+        for entry in &self.entries {
+            if entry.id.trim().is_empty() || entry.entry.trim().is_empty() {
+                return Err(ConfigError::InvalidValue(
+                    "plugin entry id and entry must not be empty".into(),
+                ));
+            }
+            if !ids.insert(&entry.id) {
+                return Err(ConfigError::InvalidValue(format!(
+                    "duplicate plugin entry id: {}",
+                    entry.id
+                )));
+            }
+        }
         if self.enabled
             && matches!(self.auto_start, AutoStartPolicy::Required)
             && self.directories.is_empty()
@@ -1211,7 +1258,11 @@ mod tests {
 
     #[test]
     fn resolves_paths_against_config_directory() {
-        let mut config = CoreConfig::default();
+        let mut config = CoreConfig {
+            data_dir: PathBuf::from(".qh-assistant"),
+            workspace: PathBuf::from("."),
+            ..CoreConfig::default()
+        };
         config.resolve_paths("/tmp/qh-config");
 
         assert_eq!(

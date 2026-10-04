@@ -35,8 +35,10 @@
 - [ ] Adapter health check & retry (`max_retries` is in config but unused)
 - [ ] Multiple adapter registration & switching (`LlmAdapterHandler`)
 
-## ⏳ Phase 5 · Plugin system
+## 🚧 Phase 5 · Plugin system
 
+- [x] Plugin classification: `PluginKind = Native | Sidecar { runtime }` — Rust native (in-process) vs other languages (separate process)
+- [x] `PluginManifest` declares its kind; `PluginManager` exposes `native_plugins()` / `sidecar_plugins()` / `is_native()`
 - [ ] `PluginManager`: discovery from configured dirs, lifecycle (start / stop / restart policy)
 - [ ] `plugin/protocol.rs`: handshake (Hello / Ready) and version negotiation
 - [ ] `plugin/sidecar.rs`: child-process host + framed IPC (`ipc.rs` already has the transport)
@@ -44,11 +46,13 @@
 - [ ] Health checks and crash recovery
 - [ ] Plugin process isolation + sandbox
 
-## ⏳ Phase 6 · Sessions & context
+## 🚧 Phase 6 · Sessions & context
 
-- [ ] `RootSupervisor` (ractor actor): session lifecycle, `CreateSession` / `ListSessions` / `DeleteSession`
-- [ ] `SessionActor`: `SendMessage` / `Cancel`, multi-turn context
-- [ ] Session persistence (write back to `session_records` / `message_records`)
+- [x] `SessionActor` (ractor): per-session history + adapter call, `SendMessage` / `History` / `Cancel`
+- [x] `RootSupervisor` (ractor): `CreateSession` / `ListSessions` / `DeleteSession` + message routing
+- [x] `AgentCore` session API: `create_session` / `send_message` / `list_sessions` / `delete_session` / `history`
+- [x] Session persistence: `SqliteStore` CRUD (create / list / delete session, append / load message); history reloaded on session start
+- [ ] Session restore on boot (reload persisted sessions into live actors)
 - [ ] `ToolRegistry` (after Phase 5)
 - [ ] Context compression extension point
 

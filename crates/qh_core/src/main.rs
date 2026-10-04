@@ -6,10 +6,21 @@ async fn main() -> anyhow::Result<()> {
     let config = demo_config();
     let core = AgentCore::bootstrap(config).await?;
 
-    // 演示一次补全（仅当配置了 adapter 时）
-    match core.complete("用一句话介绍你自己").await {
-        Ok(resp) => println!("assistant: {}", resp.content),
-        Err(e) => tracing::warn!("skip completion: {e}"),
+    // 演示多轮会话（仅当配置了 adapter 时）
+    if core.has_adapter() {
+        let id = core.create_session().await?;
+        println!("== session {id} ==");
+
+        for prompt in ["你好，我叫小明。", "我叫什么名字？"] {
+            match core.send_message(id, prompt).await {
+                Ok(reply) => println!("user: {prompt}\nassistant: {reply}\n"),
+                Err(err) => tracing::warn!("send_message failed: {err}"),
+            }
+        }
+
+        let history = core.history(id).await?;
+        println!("history has {} messages", history.len());
+        core.delete_session(id).await?;
     }
 
     core.run().await?;

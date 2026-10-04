@@ -61,6 +61,8 @@ pub enum SessionError {
     AgentLoop(String),
     #[error(transparent)]
     Adapter(#[from] AdapterError),
+    #[error(transparent)]
+    Storage(#[from] StorageError),
 }
 
 /// Errors crossing the plugin host boundary.

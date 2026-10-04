@@ -2,7 +2,7 @@ use crate::error::{AuditError, DataBaseError};
 use serde::{Deserialize, Serialize};
 use serde_json;
 use sha2::{Digest, Sha256};
-use sqlx::{query_as, sqlite::{SqliteConnectOptions, SqliteJournalMode, SqlitePoolOptions, SqliteSynchronous}, Executor, FromRow, QueryBuilder, SqlitePool};
+use sqlx::{query_as, query_scalar, sqlite::{SqliteConnectOptions, SqliteJournalMode, SqlitePoolOptions, SqliteSynchronous}, Executor, FromRow, QueryBuilder, SqlitePool};
 use futures_util::TryStreamExt;
 use std::path::Path;
 use std::time::{Duration, SystemTime, UNIX_EPOCH};
@@ -253,7 +253,7 @@ impl AuditStore {
         let created_at = now_unix_millis();
         let hash = calculate_hash(created_at, &input, &prev_hash)?;
 
-        let row = query_as::<_, AuditRecord>(
+        let row = query_scalar::<_, i64>(
             r#"INSERT INTO audit_records (
                    created_at, actor, session_id, plugin_id, user_id, target, action,
                    parameters, outcome, error, duration_ms, trace_id, parent_span_id,
@@ -297,7 +297,7 @@ impl AuditStore {
         tx.commit().await?;
 
         Ok(Some(AuditRecord {
-            id: row.id,
+            id: row,
             created_at,
             actor: input.actor,
             session_id: input.session_id,
