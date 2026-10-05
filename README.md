@@ -81,11 +81,28 @@ is available to either.
 
 ### 1. Three layers
 
+```text
+┌──────────────────────────────────────────────────────────┐
+│  user plugins          (native / sidecar)                 │  free extension / override
+├──────────────────────────────────────────────────────────┤
+│  bundled plugins       (shipped with the core)            │  complete by default, trimmable
+│  adapter · compressor · prompt · loop · tool · memory     │
+├──────────────────────────────────────────────────────────┤
+│  KERNEL                (hard-wired control)               │  non-bypassable
+│  lifecycle · permission · budget · cancel · timeout ·     │
+│  audit · pipeline · registry · comms · host               │
+└──────────────────────────────────────────────────────────┘
+```
+
 | Layer | Responsibility | Stability |
 |---|---|---|
-| **Core Kernel** | Minimal domain model + non-bypassable invariants (lifecycle / permissions / budget / cancellation / timeout / audit) | Frozen, changed sparingly |
-| **Core Protocol** | Stable wire protocol between Core ↔ Provider / Plugin / Extension | Versioned, backward compatible |
-| **Optional Capabilities** | Every replaceable capability from Plugin / Extension / Sidecar | Add / remove freely, never enters Core |
+| **Kernel** | Minimal domain model + non-bypassable invariants + invocation pipeline + extension registry + comms + plugin host | Frozen, changed sparingly |
+| **Bundled plugins** | The default set (adapter / compressor / prompt / loop / …) shipped with the core | Released with the core |
+| **User plugins** | Native / sidecar plugins supplied by the user | Fully free |
+
+> The kernel is not "whatever is left after plugins". It is **the set of things no plugin is allowed to own**.
+>
+> Details in [architecture.md](crates/qh_protocol/architecture.md).
 
 ### 2. Capability boundary
 
@@ -247,6 +264,7 @@ qh_core/                        # Cargo workspace
 
 ## Reference
 
+- [Architecture](crates/qh_protocol/architecture.md) — kernel boundary and the three-layer layout
 - [Core v1 Contract](crates/qh_protocol/core_contract.md) — the frozen minimal boundary
 - [Plugin runtime design](crates/qh_protocol/plugin_runtime.md) — kinds, lifecycle, extension points, defaults & override
 - [Cross-language protocol](crates/qh_protocol/protocols.md) — plugin handshake and message frames

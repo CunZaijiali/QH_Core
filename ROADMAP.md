@@ -1,6 +1,9 @@
 # Roadmap
 
 > Startup proceeds in **Phases 1-7**. This file tracks done items, todos and known issues.
+>
+> Architecture (kernel boundary + three layers) is defined in
+> [crates/qh_protocol/architecture.md](crates/qh_protocol/architecture.md).
 
 ---
 
@@ -35,16 +38,19 @@
 - [ ] Adapter health check & retry (`max_retries` is in config but unused)
 - [ ] Multiple adapter registration & switching (`LlmAdapterHandler`)
 
-## 🚧 Phase 5 · Plugin system
+## 🚧 Phase 5 · Plugin runtime
 
 - [x] Plugin classification: `PluginKind = Native | Sidecar { runtime }` — Rust native (in-process) vs other languages (separate process)
-- [x] `PluginManifest` declares its kind; `PluginManager` exposes `native_plugins()` / `sidecar_plugins()` / `is_native()`
-- [ ] `PluginManager`: discovery from configured dirs, lifecycle (start / stop / restart policy)
-- [ ] `plugin/protocol.rs`: handshake (Hello / Ready) and version negotiation
-- [ ] `plugin/sidecar.rs`: child-process host + framed IPC (`ipc.rs` already has the transport)
-- [ ] Plugin capability declarations wired to `Capability` checks
-- [ ] Health checks and crash recovery
-- [ ] Plugin process isolation + sandbox
+- [x] Explicit plugin list in config (`[[plugins.entries]]`; no directory scanning in v1)
+- [x] `PluginState` lifecycle machine (Discovered → Loading → Handshaking → Ready → Stopping → Stopped / Failed)
+- [ ] Workspace split: `qh_plugin_api` (extension traits) + `qh_core` (kernel) + `qh_plugins` (default set)
+- [ ] `qh_plugin_api`: extension-point traits, **driven by the default plugins** (the interface grows out of real needs, not up-front abstraction)
+- [ ] `qh_plugins`: the default set — `adapter-openai` / `compressor-sliding` / `prompt-default` / `loop-budget`
+- [ ] `plugin/protocol.rs`: handshake + invoke / cancel on top of `ipc.rs`
+- [ ] `plugin/sidecar.rs`: child-process host + lazy-load scheduling
+- [ ] Reference plugins: Python → Node(TS) → Rust
+- [ ] Capability declarations wired to `Capability` checks
+- [ ] Health checks + restart policy
 
 ## 🚧 Phase 6 · Sessions & context
 

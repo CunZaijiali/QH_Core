@@ -1,18 +1,24 @@
 # Core v1 Contract
 
-> 版本 `v1` · 状态：冻结草案 · 关联文档：`protocols.md`（跨语言插件协议）、`capability_schema.json`（能力授权模型）
+> 版本 `v1` · 状态：冻结草案 · 关联文档：[architecture.md](architecture.md)（Kernel 与三层架构）、`protocols.md`（跨语言插件协议）、`capability_schema.json`（能力授权模型）
 
 本文档冻结 `qh_core` 的**最小功能边界**：Core 到底必须知道什么、哪些内容一旦进入 Core 就会成为永久兼容负担。所有后续实现以本文档为基线。
 
 ## 1. 定位与分层
 
-`qh_core` 是一个**不依赖任何插件即可运行的单模态文本对话运行时**。插件与 Extension 只负责让 Core「更强」，不负责让它「变得可运行」。
+`qh_core` 是一个**不依赖第三方插件即可运行的单模态文本对话运行时**——因为「一个完整 agent 所需要的所有能力」都以插件形式**随 Core 提供**，开箱即用。
+
+系统分三层（详见 [architecture.md](architecture.md)）：
 
 | 层 | 内容 | 稳定性 |
 |---|---|---|
-| **Core Kernel** | 最小领域模型 + 不可绕过的不变式（生命周期/权限/预算/取消/超时/审计） | 冻结后不轻易改 |
-| **Core Protocol** | Core ↔ Provider / Plugin / Extension 的线协议 | 版本化，向后兼容 |
-| **Optional Capabilities** | Plugin / Extension / Sidecar 提供的可替换能力 | 可增删，不进 Core |
+| **Kernel** | 最小领域模型 + 不可绕过的不变式（生命周期 / 权限 / 预算 / 取消 / 超时 / 审计）+ 调用管线 + 注册表 + 通信 + 宿主 | 冻结后不轻易改 |
+| **Bundled plugins** | 默认插件集：adapter / compressor / prompt / loop / … 随 Core 携带，可裁剪 | 随 Core 发布 |
+| **User plugins** | 用户提供的 native / sidecar 插件 | 完全自由 |
+
+> 判据：**Kernel 不是「插件做完后剩下的」，而是「任何插件都不允许拥有的东西」的集合。**
+>
+> 把某件事交给插件，若插件会因此反过来控制系统（权限 / 预算 / 取消 / 超时 / 审计 / 管线 / 其他插件句柄），那它就属于 Kernel。
 
 ## 2. 领域模型（冻结）
 
@@ -75,14 +81,33 @@ pub struct Usage {
 SessionId · ModelId · RequestId · TraceId
 ```
 
-## 4. 生命周期（最小行为）
+## 4. 生命周期与调用管线
 
 ```
 启动 → 读取配置 → 创建内存 Session → 接收 system/user/assistant 消息
      → 调用内置 Adapter → 返回文本 → 取消 / 超时 / 错误 → 优雅关闭
 ```
 
-**无插件目录、无 Extension、无 RPC、无工具、无多模态时，Core 仍必须完成上述闭环。**
+**没有第三方插件时，Core 仍必须完成上述闭环**（能力由随 Core 提供的默认插件集满足）。
+
+### 4.1 Session 所有权
+
+**Kernel 持有内存中的会话状态**，是会话上下文的唯一所有者（保证并发定序）。持久化可以由插件承担，但只能通过 Kernel 提供的受控接口读写；插件不得自行持有会话状态。
+
+### 4.2 调用管线（硬编码）
+
+一次对话经过的阶段**顺序固定**，由 Kernel 编排；插件只能在固定位置「选择参与或不参与」：
+
+```
+locate/create Session → budget check → deadline start
+  → context_compressor → prompt_builder → request_transformer
+  → permission check
+  → adapter.complete
+  → response_transformer
+  → audit write → persist → publish event
+```
+
+`Session / budget / deadline / permission / audit / persist` 是 Kernel 强制点，插件无从插入；顺序不可配置。详见 [architecture.md](architecture.md) §3。
 
 v1 暂不要求：完整 Actor 监督树、多租户、Session 恢复、分布式调度、动态模型切换、插件热更新、多存储后端。
 

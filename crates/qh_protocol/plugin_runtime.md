@@ -1,6 +1,6 @@
-# 插件运行时设计（v0.3 · 决策已定）
+# 插件运行时设计（v0.4 · 决策已定）
 
-> 状态：**决策已定，待实现** · 关联：[core_contract.md](core_contract.md)、[protocols.md](protocols.md)
+> 状态：**决策已定，待实现** · 关联：[core_contract.md](core_contract.md)、[architecture.md](architecture.md)、[protocols.md](protocols.md)
 
 ---
 
@@ -15,7 +15,10 @@
 | 5 | 启动时机 | **懒加载**（首次调用才拉起/初始化） |
 | 6 | 参考插件语言 | **Rust / Node(TS) / Python** 三种 |
 | 7 | 插件间调用 | **v1 不允许**；且任何跨插件交互都必须**走 Core 中转的通信**，不允许直接调用 |
-| 8 | 默认能力 | **一切皆插件**（adapter / context compressor 等都是插件）；默认实现**编译进 Core**，开箱可用，可被覆盖 / 重写 |
+| 8 | 默认能力 | **一切皆插件**（adapter / context compressor 等都是插件）；默认实现**随 Core 提供**，开箱可用，可被覆盖 / 重写 |
+| 9 | Session 归属 | **Kernel 持有内存会话状态**（保证定序）；持久化可以是插件，但只能经 Kernel 受控接口 |
+| 10 | 调用管线 | **硬编码**在 Kernel；插件只能在固定位置选择「用 / 不用」，不能改顺序 |
+| 11 | 物理布局 | **独立 crate**：`qh_plugin_api`（接口）/ `qh_core`（kernel）/ `qh_plugins`（默认集） |
 
 ---
 
@@ -309,6 +312,10 @@ plugins/
 | **P5.7** | Native 注册接口 `NativePlugin` + `PluginContext` + 各扩展点 trait | P5.1 |
 | **P5.8** | 能力授权联调（manifest → Capability → grants） | P5.2 / P5.3 |
 | **P5.9** | 健康检查 + 重启策略 | P5.3 |
+
+**物理布局**：Kernel 与默认插件的 crate 划分见 [architecture.md](architecture.md) §5 ——
+`qh_plugin_api`（扩展点 trait + 共享领域类型）/ `qh_core`（kernel）/ `qh_plugins`（默认集）。
+P5.7 的 trait 定义落在 `qh_plugin_api`，并且**由 `qh_plugins` 的实现驱动**（接口从真实需求长出来，不先抽象）。
 
 ---
 
