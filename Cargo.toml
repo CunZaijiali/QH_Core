@@ -1,6 +1,6 @@
 [workspace]
 members = [
     "crates/qh_core",
-    "crates/qh_macros",
+    "crates/qh_macros", "crates/qh_plugins",
 ]
 resolver = "2"

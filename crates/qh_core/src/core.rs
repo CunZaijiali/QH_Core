@@ -26,7 +26,7 @@ use crate::storage::sqlite::{SessionRecord, SqliteStore};
 /// Phase 5、7（插件 / handle）逐步补齐。
 pub struct AgentCore {
     config: Arc<CoreConfig>,
-    logger: Logger,
+    _logger: Logger,
     store: Arc<SqliteStore>,
     events: Arc<EventService>,
     audit: Arc<AuditService>,
@@ -43,7 +43,7 @@ impl AgentCore {
         // TODO 降级策略
 
         // Phase 1: 基础设施
-        let logger = Logger::new();
+        let _logger = Logger::new()?;
         let config = Arc::new(config);
         let store = Arc::new(SqliteStore::new(&config.storage.path).await?);
         let http = Arc::new(HttpClient::new(&config.http)?);
@@ -87,7 +87,7 @@ impl AgentCore {
 
         Ok(Self {
             config,
-            logger,
+            _logger,
             store,
             events,
             audit,

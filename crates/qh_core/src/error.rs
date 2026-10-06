@@ -5,20 +5,18 @@ use crate::{capability::CapabilityError, config::ConfigError, ipc::IpcError};
 /// Errors that can happen while constructing the runtime.
 #[derive(Debug, Error)]
 pub enum BootstrapError {
+    #[error("environment load failed: {0}")]
+    Environment(String), // TODO Environment Exception
     #[error(transparent)]
     Config(#[from] ConfigError),
-    #[error("storage initialization failed: {0}")]
-    Storage(#[from] StorageError),
     #[error("event system initialization failed: {0}")]
-    Events(#[from] EventError),
-    #[error("audit initialization failed: {0}")]
-    Audit(#[from] AuditError),
-    #[error("adapter initialization failed: {0}")]
-    Adapter(#[from] AdapterError),
-    #[error("plugin initialization failed: {0}")]
-    Plugin(#[from] PluginError),
-    #[error("runtime initialization failed: {0}")]
-    Runtime(String),
+    EventsSys(#[from] EventError),
+    #[error("plugin system initialization failed: {0}")]
+    PluginSys(#[from] PluginError),
+    #[error("core component initialization failed: {0}")]
+    Component(String),
+    #[error("unexpected exception happened: {0}")]
+    Other(String),
 }
 
 #[derive(Debug, Error)]
