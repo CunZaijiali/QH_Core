@@ -9,7 +9,13 @@
 
 `qh_core` 已从「一个想和 DSH 竞争的 agent runtime」**重新定位为「个人项目的基石 + QH 系列的内核」**。
 
-代码进度：**Phase 1-4 与 Phase 6 完成，Phase 5（插件运行时）进行中**。可编译、可运行、21 个测试通过、已推 GitHub。
+代码进度：**Phase 1-4 与 Phase 6 完成，Phase 5（插件运行时）进行中**。
+
+> ⚠️ **`main` 分支当前编译不过** —— `BootstrapError` 正在被作者重构（变体精简中：删掉了 `Storage` / `Audit` / `Adapter` / `Runtime`，调用处尚未同步）。
+>
+> 这是**刻意的进行中状态，请不要代为修复**，也不要恢复被删的变体 —— 那是作者对结构的主动调整。
+>
+> 受影响位置：`core.rs`（46 / 48 / 55 / 63 / 79 行）、`http.rs`（15 行）。
 
 ---
 
@@ -107,6 +113,7 @@
 
 | 位置 | 问题 |
 |---|---|
+| **`core.rs` / `http.rs`** | **`BootstrapError` 重构进行中 → 编译不过（刻意状态，勿代为修复）** |
 | `event.rs` | 四总线未接线，字段全部 `never read` |
 | `core.rs` | `AgentCore` 多数字段尚未被 `run()` 消费 |
 | `plugin.rs` | `PluginManager` 只到生命周期状态，无 host / disposer |
