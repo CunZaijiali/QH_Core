@@ -1,9 +1,30 @@
 # Roadmap
 
-> Startup proceeds in **Phases 1-7**. This file tracks done items, todos and known issues.
+> `qh_core` is the kernel of the **QH series**: the shared runtime layer that QH applications are built
+> on. This file tracks what is done, what is next, and what is currently broken.
 >
-> Architecture (kernel boundary + three layers) is defined in
+> Delivery proceeds in **Phases 1-7**. Architecture (kernel boundary + three layers) is defined in
 > [crates/qh_protocol/architecture.md](crates/qh_protocol/architecture.md).
+
+---
+
+## 🎯 Current focus
+
+Three areas are the declared focus of the next stretch of work, in this order:
+
+1. **Event propagation model.** `event.rs` today defines the four buses (Notification / Command /
+   Stream / Broadcast) as a skeleton. Still to add: publish / subscribe, backpressure, persistence
+   so offline subscribers can catch up, and integration with the invocation pipeline.
+2. **Multi-language plugin system.** `Native` (in-process Rust, static registration) and `Sidecar`
+   (separate process, framed IPC) must implement the *same* extension points with equal capability.
+   The only deliberate asymmetry is that flow-control middleware stays in-process. Reference plugin
+   languages: Python → Node (TS) → Rust.
+3. **MCP support.** MCP should be admitted as a plugin / tool source. Open question: whether it
+   reuses the MCP protocol directly, bridges to the native plugin protocol, or is admitted only as
+   one more `ToolProvider`.
+
+Planned order of work: workspace split for plugins → `qh_plugin_api` traits (driven by the default
+plugins, not abstracted up front) → event model → sidecar host + protocol → MCP.
 
 ---
 
@@ -13,7 +34,7 @@
 - [x] `SqliteStore`: sqlx + WAL, `session_records` / `message_records` tables
 - [x] `HttpClient`: reqwest + native-tls (HTTPS works)
 
-## ✅ Phase 2 · Event system
+## 🚧 Phase 2 · Event system
 
 - [x] Four-bus skeleton: `NotificationBus` / `CommandBus` / `StreamHub` / `BroadcastHub`
 - [x] `EventService::new(&EventsConfig)` assembly
@@ -43,7 +64,9 @@
 - [x] Plugin classification: `PluginKind = Native | Sidecar { runtime }` — Rust native (in-process) vs other languages (separate process)
 - [x] Explicit plugin list in config (`[[plugins.entries]]`; no directory scanning in v1)
 - [x] `PluginState` lifecycle machine (Discovered → Loading → Handshaking → Ready → Stopping → Stopped / Failed)
-- [ ] Workspace split: `qh_plugin_api` (extension traits) + `qh_core` (kernel) + `qh_plugins` (default set)
+- [x] Workspace split, step 1: `qh_plugins` crate added to the workspace (still a skeleton)
+- [ ] Workspace split, step 2: `qh_plugin_api` (extension traits + shared domain types) as the
+      bottom layer shared by kernel and plugins
 - [ ] `qh_plugin_api`: extension-point traits, **driven by the default plugins** (the interface grows out of real needs, not up-front abstraction)
 - [ ] `qh_plugins`: the default set — `adapter-openai` / `compressor-sliding` / `prompt-default` / `loop-budget`
 - [ ] `plugin/protocol.rs`: handshake + invoke / cancel on top of `ipc.rs`
@@ -52,13 +75,13 @@
 - [ ] Capability declarations wired to `Capability` checks
 - [ ] Health checks + restart policy
 
-## 🚧 Phase 6 · Sessions & context
+## ✅ Phase 6 · Sessions & context
 
 - [x] `SessionActor` (ractor): per-session history + adapter call, `SendMessage` / `History` / `Cancel`
 - [x] `RootSupervisor` (ractor): `CreateSession` / `ListSessions` / `DeleteSession` + message routing
 - [x] `AgentCore` session API: `create_session` / `send_message` / `list_sessions` / `delete_session` / `history`
 - [x] Session persistence: `SqliteStore` CRUD (create / list / delete session, append / load message); history reloaded on session start
-- [ ] Session restore on boot (reload persisted sessions into live actors)
+- [x] Session restore on boot (`RootSupervisor` reloads persisted sessions from `SqliteStore`)
 - [ ] `ToolRegistry` (after Phase 5)
 - [ ] Context compression extension point
 
@@ -70,7 +93,8 @@
 
 ## 🔧 Engineering
 
-- [ ] Clear `dead_code` / `unused` warnings (18 today; should shrink as Phase 5-7 wires up)
+- [ ] Clear `dead_code` / `unused` warnings (10 today, from `cargo check`; should shrink as Phase 5-7 wires up)
+- [ ] Make `main` build again (see Known issues: the `BootstrapError` refactor is mid-flight)
 - [ ] Fill in unit tests (`capability` / `audit` / `ipc` / `qh_macros` have tests; the rest don't)
 - [ ] Integration tests: protocol golden fixtures (`tests/protocol/*.json`)
 - [ ] CI: `cargo fmt` / `cargo clippy` / `cargo test`
@@ -87,9 +111,16 @@
 
 ## Known issues
 
+**The tree does not build at the current commit.** `cargo check --workspace --all-targets` fails with
+6 errors (`E0277` / `E0599`): the `BootstrapError` enum has been reduced to a smaller variant set and
+the call sites have not been updated yet.
+
 | Location | Issue |
 |---|---|
-| `event.rs` | The four buses are skeletons; all fields are `never read` and publish/subscribe is not wired yet |
-| `core.rs` | `AgentCore`'s `config` / `logger` / `store` / `events` / `audit` / `http` fields exist but `run()` does not consume them yet |
-| `plugin.rs` | `PluginManager` is still the no-arg HashMap version, not the lifecycle-managed version Phase 5 needs |
+| `error.rs` → `core.rs:79`, `http.rs:15` | `BootstrapError::Runtime` (and other removed variants) are still referenced, so the workspace does not compile |
+| `event.rs` | The four buses are skeletons; publish / subscribe is not wired yet and most fields are unused |
+| `core.rs` | `AgentCore`'s `config` / `events` / `audit` / `http` fields exist but `run()` does not consume them yet |
+| `plugin.rs` | `PluginManager` only reaches the lifecycle state machine; there is no host / disposer yet |
+| `core/handle.rs`, `core/shutdown.rs`, `plugin/{manager,manifest,protocol,sidecar}.rs`, `cli.rs`, `context.rs`, `domain/context.rs`, `token.rs` | Empty placeholder modules |
 | `security/apikey.rs` | `ApiKeyManager::new()` / `get_key()` / `set_key()` are not `pub` yet, so the adapter cannot use them |
+| `qh_plugins/` | The default plugin set is a `Hello, world!` skeleton; the real plugins land with `qh_plugin_api` |

@@ -2,7 +2,14 @@
 
 > A single-modal text chat runtime that runs **without requiring any plugin**.
 
-`qh_core` is a minimal agent runtime written in Rust. Its trade-offs compress into one rule:
+`qh_core` is the kernel of the **QH series** — the shared runtime layer that QH applications are built
+on. It is not a general-purpose agent framework and does not aim to compete with the existing
+ecosystem: the point of having one kernel is that every member of the series inherits the same
+lifecycle, the same plugin protocol and the same control model instead of growing its own.
+
+What the kernel itself does is deliberately small. It can start on its own, complete a basic text
+turn, handle cancellation / timeouts / errors / shutdown correctly, and host optional extensions
+**without ever requiring one to run**. Its trade-offs compress into one rule:
 
 > **Only what cannot be removed without breaking basic chat, or without losing a security / lifecycle invariant, stays in the core.**
 
@@ -11,16 +18,18 @@ Tool calling, multimodality, model routing, RAG, memory, context compression, mu
 - it can start on its own;
 - it can complete a basic text turn;
 - it handles cancellation, timeouts, errors and shutdown correctly;
+- it keeps the control invariants (permission / budget / cancel / timeout / audit / pipeline order)
+  out of reach of plugins;
 - it can load optional extensions, **but never requires a plugin to run**.
 
 ---
 
-## Why another agent runtime?
+## Why a kernel at all?
 
-"Everything is a plugin" is no longer a differentiator — most modern frameworks (editors, build
-tools, agent harnesses) are pluggable. The interesting question is not *whether* a system is
-extensible, but **which parts must be hard-wired, which must stay soft, and where the line is
-drawn**.
+A kernel is only worth having if it is clear about the line it draws. "Everything is a plugin" is not
+a differentiator by itself — most modern frameworks (editors, build tools, agent harnesses) are
+pluggable. The interesting question is not *whether* a system is extensible, but **which parts must
+be hard-wired, which must stay soft, and where the line is drawn**.
 
 `qh_core` draws the line in one place:
 
@@ -185,13 +194,15 @@ Four unified event primitives, in-process and cross-process (`event.rs`):
 
 ## Status
 
-Startup is built in **Phases 1-7**. Currently **Phases 1-4 are done and 5-6 are in progress** —
-it compiles, runs, and holds a multi-turn conversation with persistence:
+Development is tracked in **Phases 1-7**: **Phases 1, 3, 4 and 6 are in place; Phases 2 and 5 are in
+progress; Phase 7 has not started.** The kernel API is not frozen, so the tree is not guaranteed to
+build at every commit while it is being reshaped — the current build state is tracked in
+[ROADMAP.md](ROADMAP.md).
 
 | Phase | Content | Status |
 |---|---|---|
 | 1 | Infrastructure: logging / SQLite storage / HTTP client | ✅ |
-| 2 | Event system: four-bus skeleton | ✅ |
+| 2 | Event system: four-bus skeleton (not wired yet) | 🚧 |
 | 3 | Core services: hash-chain audit / key management | ✅ |
 | 4 | Model adapter: OpenAI-compatible adapter + text completion | ✅ |
 | 5 | Plugin runtime: classification / explicit list / lifecycle state machine | 🚧 |
@@ -248,6 +259,7 @@ qh_core/                        # Cargo workspace
 │   │       ├── event.rs        # four-bus events
 │   │       ├── ipc.rs          # cross-language IPC framing
 │   │       ├── plugin.rs       # plugin manifest / kind / lifecycle state
+│   │       ├── plugin/         # manifest / manager (+ protocol & sidecar placeholders)
 │   │       ├── http.rs         # HTTP client
 │   │       ├── security/       # audit service + keyring secrets
 │   │       ├── storage/        # SQLite storage
@@ -256,6 +268,7 @@ qh_core/                        # Cargo workspace
 │   │       ├── llm/            # adapter contract + OpenAI-compatible impl
 │   │       └── main.rs         # executable entry point
 │   ├── qh_macros/              # proc macros (define_id)
+│   ├── qh_plugins/             # default plugin set (crate skeleton)
 │   └── qh_protocol/            # protocol docs & schemas
 └── ROADMAP.md
 ```
