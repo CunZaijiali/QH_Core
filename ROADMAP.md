@@ -1,7 +1,7 @@
 # Roadmap
 
 > `qh_core` is the kernel of the **QH series**: the shared runtime layer that QH applications are built
-> on. This file tracks what is done, what is next, and what is currently broken.
+> on. This file tracks what is done, what is next, and what is still in flight.
 >
 > Delivery proceeds in **Phases 1-7**. Architecture (kernel boundary + three layers) is defined in
 > [crates/qh_protocol/architecture.md](crates/qh_protocol/architecture.md).
@@ -94,7 +94,7 @@ plugins, not abstracted up front) → event model → sidecar host + protocol �
 ## 🔧 Engineering
 
 - [ ] Clear `dead_code` / `unused` warnings (10 today, from `cargo check`; should shrink as Phase 5-7 wires up)
-- [ ] Make `main` build again (see Known issues: the `BootstrapError` refactor is mid-flight)
+- [ ] Finish the `BootstrapError` variant consolidation and update the remaining call sites (see Known issues)
 - [ ] Fill in unit tests (`capability` / `audit` / `ipc` / `qh_macros` have tests; the rest don't)
 - [ ] Integration tests: protocol golden fixtures (`tests/protocol/*.json`)
 - [ ] CI: `cargo fmt` / `cargo clippy` / `cargo test`
@@ -111,13 +111,13 @@ plugins, not abstracted up front) → event model → sidecar host + protocol �
 
 ## Known issues
 
-**The tree does not build at the current commit.** `cargo check --workspace --all-targets` fails with
-6 errors (`E0277` / `E0599`): the `BootstrapError` enum has been reduced to a smaller variant set and
-the call sites have not been updated yet.
+The error layer is being consolidated: `BootstrapError` is being reduced to a smaller set of variants,
+and a few construction sites still use variants from the older enum. Those are expected to be updated
+as the consolidation lands.
 
 | Location | Issue |
 |---|---|
-| `error.rs` → `core.rs:79`, `http.rs:15` | `BootstrapError::Runtime` (and other removed variants) are still referenced, so the workspace does not compile |
+| `error.rs` → `core.rs:79`, `http.rs:15` | A few `BootstrapError::*` construction sites still reference variants from the older, larger enum, so a clean build waits on that consolidation |
 | `event.rs` | The four buses are skeletons; publish / subscribe is not wired yet and most fields are unused |
 | `core.rs` | `AgentCore`'s `config` / `events` / `audit` / `http` fields exist but `run()` does not consume them yet |
 | `plugin.rs` | `PluginManager` only reaches the lifecycle state machine; there is no host / disposer yet |

@@ -195,9 +195,8 @@ Four unified event primitives, in-process and cross-process (`event.rs`):
 ## Status
 
 Development is tracked in **Phases 1-7**: **Phases 1, 3, 4 and 6 are in place; Phases 2 and 5 are in
-progress; Phase 7 has not started.** The kernel API is not frozen, so the tree is not guaranteed to
-build at every commit while it is being reshaped — the current build state is tracked in
-[ROADMAP.md](ROADMAP.md).
+progress; Phase 7 has not started.** The kernel API is still being shaped, so intermediate commits are
+not expected to build; the current state is tracked in [ROADMAP.md](ROADMAP.md).
 
 | Phase | Content | Status |
 |---|---|---|
